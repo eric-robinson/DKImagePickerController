@@ -66,6 +66,8 @@ public protocol DKImagePickerControllerUIDelegate {
     func imagePickerControllerCollectionCameraCell() -> DKAssetGroupDetailBaseCell.Type
     
     func imagePickerControllerCollectionVideoCell() -> DKAssetGroupDetailBaseCell.Type
+
+    func imagePickerControllerSelectGroupButton(_ imagePickerController: DKImagePickerController, selectedGroup: DKAssetGroup) -> UIButton
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,6 +78,7 @@ open class DKImagePickerControllerBaseUIDelegate: NSObject, DKImagePickerControl
     open weak var imagePickerController: DKImagePickerController!
     
     open var doneButton: UIButton?
+    open var selectGroupButton: UIButton?
     
     open func createDoneButtonIfNeeded() -> UIButton {
         if self.doneButton == nil {
@@ -87,6 +90,27 @@ open class DKImagePickerControllerBaseUIDelegate: NSObject, DKImagePickerControl
         }
         
         return self.doneButton!
+    }
+
+    open func createSelectGroupButtonIfNeeded() -> UIButton {
+        if self.selectGroupButton == nil {
+            let button = UIButton()
+
+            #if swift(>=4.0)
+            let globalTitleColor = UINavigationBar.appearance().titleTextAttributes?[NSAttributedString.Key.foregroundColor] as? UIColor
+            let globalTitleFont = UINavigationBar.appearance().titleTextAttributes?[NSAttributedString.Key.font] as? UIFont
+            #else
+            let globalTitleColor = UINavigationBar.appearance().titleTextAttributes?[NSForegroundColorAttributeName] as? UIColor
+            let globalTitleFont = UINavigationBar.appearance().titleTextAttributes?[NSFontAttributeName] as? UIFont
+            #endif
+
+            button.setTitleColor(globalTitleColor ?? UIColor.black, for: .normal)
+            button.titleLabel!.font = globalTitleFont ?? UIFont.boldSystemFont(ofSize: 18.0)
+
+            self.selectGroupButton = button
+        }
+        
+        return self.selectGroupButton!
     }
     
     open func updateDoneButtonTitle(_ button: UIButton) {
@@ -195,6 +219,14 @@ open class DKImagePickerControllerBaseUIDelegate: NSObject, DKImagePickerControl
     open func imagePickerControllerCollectionVideoCell() -> DKAssetGroupDetailBaseCell.Type {
         return DKAssetGroupDetailVideoCell.self
     }
-    
+
+    open func imagePickerControllerSelectGroupButton(_ imagePickerController: DKImagePickerController, selectedGroup: DKAssetGroup) -> UIButton {
+        let button = self.createSelectGroupButtonIfNeeded()
+        let groupsCount = self.imagePickerController.groupDataManager.groupIds?.count ?? 0
+        button.setTitle(selectedGroup.groupName + (groupsCount > 1 ? "  \u{25be}" : "" ), for: .normal)
+        button.sizeToFit()
+        button.isEnabled = groupsCount > 1
+        return button
+    }
 }
 

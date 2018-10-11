@@ -34,29 +34,12 @@ private extension UICollectionView {
 open class DKAssetGroupDetailVC: UIViewController,
     UIGestureRecognizerDelegate,
     UICollectionViewDelegate, UICollectionViewDataSource, DKImageGroupDataManagerObserver, DKImagePickerControllerObserver {
-    	
-    public lazy var selectGroupButton: UIButton = {
-        let button = UIButton()
-		
-        #if swift(>=4.0)
-        let globalTitleColor = UINavigationBar.appearance().titleTextAttributes?[NSAttributedString.Key.foregroundColor] as? UIColor
-        let globalTitleFont = UINavigationBar.appearance().titleTextAttributes?[NSAttributedString.Key.font] as? UIFont
-        #else
-        let globalTitleColor = UINavigationBar.appearance().titleTextAttributes?[NSForegroundColorAttributeName] as? UIColor
-        let globalTitleFont = UINavigationBar.appearance().titleTextAttributes?[NSFontAttributeName] as? UIFont
-        #endif
-        
-        button.setTitleColor(globalTitleColor ?? UIColor.black, for: .normal)
-		button.titleLabel!.font = globalTitleFont ?? UIFont.boldSystemFont(ofSize: 18.0)
-		
-		button.addTarget(self, action: #selector(DKAssetGroupDetailVC.showGroupSelector), for: .touchUpInside)
-        return button
-    }()
-		
+
     public var selectedGroupId: String?
     internal var collectionView: UICollectionView!
     internal weak var imagePickerController: DKImagePickerController!
     private var groupListVC: DKAssetGroupListVC!
+    private var selectGroupButton: UIButton?
     private var hidesCamera: Bool = false
     private var footerView: UIView?
     private var headerView: UIView?
@@ -68,7 +51,7 @@ open class DKAssetGroupDetailVC: UIViewController,
         super.viewDidLoad()
         
         self.imagePickerController.add(observer: self)
-		
+
 		let layout = self.imagePickerController.UIDelegate.layoutForImagePickerController(self.imagePickerController).init()
 		self.collectionView = UICollectionView(frame: CGRect.zero, collectionViewLayout: layout)
         self.collectionView.backgroundColor = self.imagePickerController.UIDelegate.imagePickerControllerCollectionViewBackgroundColor()
@@ -76,17 +59,17 @@ open class DKAssetGroupDetailVC: UIViewController,
 		self.collectionView.delegate = self
 		self.collectionView.dataSource = self
 		self.view.addSubview(self.collectionView)
-		
+
 		self.footerView = self.imagePickerController.UIDelegate.imagePickerControllerFooterView(self.imagePickerController)
 		if let footerView = self.footerView {
 			self.view.addSubview(footerView)
 		}
-      
+
     self.headerView = self.imagePickerController.UIDelegate.imagePickerControllerHeaderView(self.imagePickerController)
     if let headerView = self.headerView {
       self.view.addSubview(headerView)
     }
-		
+
 		self.hidesCamera = self.imagePickerController.sourceType == .photo
 		self.checkPhotoPermission()
         
@@ -115,13 +98,13 @@ open class DKAssetGroupDetailVC: UIViewController,
         
         self.collectionView?.collectionViewLayout.invalidateLayout()
     }
-	
+
 	override open func viewDidLayoutSubviews() {
 		super.viewDidLayoutSubviews()
-		
+
     configureAccessoryViews()
   }
-  
+
   func configureAccessoryViews() {
     var footerViewFrame = CGRect.zero
     var headerViewFrame = CGRect.zero
@@ -146,7 +129,7 @@ open class DKAssetGroupDetailVC: UIViewController,
       }
       headerView.frame = headerViewFrame
     }
-    
+
     if #available(iOS 11.0, *) {
       // Handling Safe Areas for iOS 11
       self.collectionView.frame = CGRect(x: 0,
@@ -160,7 +143,7 @@ open class DKAssetGroupDetailVC: UIViewController,
                                          height: self.view.bounds.height - footerViewFrame.height - headerViewFrame.height)
     }
   }
-	
+
 	internal func checkPhotoPermission() {
 		func photoDenied() {
             let permissionColors = self.imagePickerController.permissionViewColors
@@ -185,7 +168,7 @@ open class DKAssetGroupDetailVC: UIViewController,
 			granted ? setup() : photoDenied()
 		}
 	}
-	
+
     func selectAssetGroup(_ groupId: String?) {
         if self.selectedGroupId == groupId {
             self.updateTitleView()
@@ -199,20 +182,19 @@ open class DKAssetGroupDetailVC: UIViewController,
     
 	open func updateTitleView() {
         guard let selectedGroupId = self.selectedGroupId else { return }
+        let group = self.imagePickerController.groupDataManager.fetchGroupWithGroupId(selectedGroupId)
+        self.title = group.groupName
         
-		let group = self.imagePickerController.groupDataManager.fetchGroupWithGroupId(selectedGroupId)
-		self.title = group.groupName
-		
-		let groupsCount = self.imagePickerController.groupDataManager.groupIds?.count ?? 0
-		self.selectGroupButton.setTitle(group.groupName + (groupsCount > 1 ? "  \u{25be}" : "" ), for: .normal)
-		self.selectGroupButton.sizeToFit()
-		self.selectGroupButton.isEnabled = groupsCount > 1
-		
-		self.navigationItem.titleView = self.selectGroupButton
+        self.selectGroupButton = self.imagePickerController.UIDelegate.imagePickerControllerSelectGroupButton(self.imagePickerController, selectedGroup: group)
+        selectGroupButton!.addTarget(self, action: #selector(DKAssetGroupDetailVC.showGroupSelector), for: .touchUpInside)
+
+        self.navigationItem.titleView = selectGroupButton!
 	}
     
     @objc func showGroupSelector() {
-        DKPopoverViewController.popoverViewController(self.groupListVC, fromView: self.selectGroupButton)
+        if let button = self.selectGroupButton {
+            DKPopoverViewController.popoverViewController(self.groupListVC, fromView: button)
+        }
     }
     
     func fetchAsset(for index: Int) -> DKAsset? {
@@ -238,6 +220,7 @@ open class DKAssetGroupDetailVC: UIViewController,
         
         if !self.imagePickerController.contains(asset: asset) {
             self.imagePickerController.select(asset: asset)
+            self.updateTitleView()
         }
     }
     
@@ -248,6 +231,7 @@ open class DKAssetGroupDetailVC: UIViewController,
         }
 
         self.imagePickerController.deselect(asset: asset)
+        self.updateTitleView()
     }
     
     public func adjustAssetIndex(_ index: Int) -> Int {
@@ -404,12 +388,12 @@ open class DKAssetGroupDetailVC: UIViewController,
         let cell = self.collectionView.dequeueReusableCell(withReuseIdentifier: cellClass.cellReuseIdentifier(), for: indexPath)
         return cell as! DKAssetGroupDetailBaseCell
     }
-	
+
     func setup(assetCell cell: DKAssetGroupDetailBaseCell, for indexPath: IndexPath, with asset: DKAsset) {
         cell.asset = asset
 		let tag = indexPath.row + 1
 		cell.tag = tag
-		
+
         if self.thumbnailSize.equalTo(CGSize.zero) {
             self.thumbnailSize = self.collectionView!.collectionViewLayout.layoutAttributesForItem(at: indexPath)!.size.toPixel()
         }
@@ -433,7 +417,7 @@ open class DKAssetGroupDetailVC: UIViewController,
 
     public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
 		guard let selectedGroupId = self.selectedGroupId else { return 0 }
-		
+
 		let group = self.imagePickerController.groupDataManager.fetchGroupWithGroupId(selectedGroupId)
         return group.totalCount + (self.hidesCamera ? 0 : 1)
     }
@@ -609,13 +593,13 @@ open class DKAssetGroupDetailVC: UIViewController,
     }
     
 	// MARK: - DKImageGroupDataManagerObserver
-	
+
 	func groupDidUpdate(groupId: String) {
 		if self.selectedGroupId == groupId {
 			self.updateTitleView()
 		}
 	}
-	
+
 	func group(groupId: String, didRemoveAssets assets: [DKAsset]) {
         for removedAsset in assets {
             if self.imagePickerController.contains(asset: removedAsset) {
