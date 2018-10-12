@@ -10,7 +10,13 @@ import Photos
 
 let DKImageGroupCellIdentifier = "DKImageGroupCellIdentifier"
 
-class DKAssetGroupCell: UITableViewCell {
+@objc public protocol DKAssetGroupCellType {
+    static var preferredHeight: CGFloat { get }
+    func configure(with assetGroup: DKAssetGroup, tag: Int, dataManager: DKImageGroupDataManager, imageRequestOptions: PHImageRequestOptions)
+}
+
+class DKAssetGroupCell: UITableViewCell, DKAssetGroupCellType {
+    static var preferredHeight: CGFloat = 70
 
     class DKAssetGroupSeparator: UIView {
 
@@ -106,6 +112,24 @@ class DKAssetGroupCell: UITableViewCell {
             width: 200,
             height: 20)
     }
+
+    func configure(with assetGroup: DKAssetGroup, tag: Int, dataManager: DKImageGroupDataManager, imageRequestOptions: PHImageRequestOptions) {
+        self.tag = tag
+        groupNameLabel.text = assetGroup.groupName
+        if assetGroup.totalCount == 0 {
+            thumbnailImageView.image = DKImagePickerControllerResource.emptyAlbumIcon()
+        } else {
+            dataManager.fetchGroupThumbnailForGroup(
+                assetGroup.groupId,
+                size: CGSize(width: thumbnailImageView.frame.width, height: thumbnailImageView.frame.width).toPixel(),
+                options: imageRequestOptions) { [weak self] image, info in
+                    if self?.tag == tag {
+                        self?.thumbnailImageView.image = image
+                    }
+            }
+        }
+        totalCountLabel.text = String(assetGroup.totalCount)
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -151,13 +175,16 @@ class DKAssetGroupListVC: UITableViewController, DKImageGroupDataManagerObserver
     }
     
     private var groupDataManager: DKImageGroupDataManager!
-    
-    init(groupDataManager: DKImageGroupDataManager,
+
+    internal weak var imagePickerController: DKImagePickerController!
+
+    init(imagePickerController: DKImagePickerController,
          defaultAssetGroup: PHAssetCollectionSubtype?,
          selectedGroupDidChangeBlock: @escaping (_ groupId: String?) -> ()) {
         super.init(style: .plain)
-        
-        self.groupDataManager = groupDataManager
+
+        self.imagePickerController = imagePickerController
+        self.groupDataManager = imagePickerController.groupDataManager
         self.defaultAssetGroup = defaultAssetGroup
         self.selectedGroupDidChangeBlock = selectedGroupDidChangeBlock
     }
@@ -173,11 +200,17 @@ class DKAssetGroupListVC: UITableViewController, DKImageGroupDataManagerObserver
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        self.tableView.register(DKAssetGroupCell.self, forCellReuseIdentifier: DKImageGroupCellIdentifier)
-        self.tableView.rowHeight = 70
+        let cellType = self.imagePickerController.UIDelegate.imagePickerControllerGroupCell()
+        self.tableView.register(cellType, forCellReuseIdentifier: DKImageGroupCellIdentifier)
+        self.tableView.rowHeight = cellType.preferredHeight
         self.tableView.separatorStyle = .none
 
         self.clearsSelectionOnViewWillAppear = false
+
+        self.navigationItem.title = DKImagePickerControllerResource.localizedStringWithKey("picker.albums")
+        self.navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel,
+                                                                target: self,
+                                                                action: #selector(cancelButtonPressed))
 
         self.groupDataManager.add(observer: self)
     }
@@ -232,36 +265,24 @@ class DKAssetGroupListVC: UITableViewController, DKImageGroupDataManagerObserver
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard let groups = self.displayGroups
-            , let cell = tableView.dequeueReusableCell(withIdentifier: DKImageGroupCellIdentifier, for: indexPath) as? DKAssetGroupCell else {
+            , let cell = tableView.dequeueReusableCell(withIdentifier: DKImageGroupCellIdentifier, for: indexPath) as? DKAssetGroupCellType else {
                 assertionFailure("Expect groups and cell")
                 return UITableViewCell()
         }
 
         let assetGroup = self.groupDataManager.fetchGroupWithGroupId(groups[indexPath.row])
-        cell.groupNameLabel.text = assetGroup.groupName
 
-        let tag = indexPath.row + 1
-        cell.tag = tag
+        cell.configure(with: assetGroup, tag: indexPath.row + 1, dataManager: groupDataManager, imageRequestOptions: groupThumbnailRequestOptions)
 
-        if assetGroup.totalCount == 0 {
-            cell.thumbnailImageView.image = DKImagePickerControllerResource.emptyAlbumIcon()
-        } else {
-            self.groupDataManager.fetchGroupThumbnailForGroup(
-                assetGroup.groupId,
-                size: CGSize(width: tableView.rowHeight, height: tableView.rowHeight).toPixel(),
-                options: self.groupThumbnailRequestOptions) { image, info in
-                    if cell.tag == tag {
-                        cell.thumbnailImageView.image = image
-                    }
-            }
-        }
-        cell.totalCountLabel.text = String(assetGroup.totalCount)
-
-        return cell
+        return cell as! UITableViewCell
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        DKPopoverViewController.dismissPopoverViewController()
+        if self.presentingViewController != nil {
+            dismiss(animated: true, completion: nil)
+        } else {
+            DKPopoverViewController.dismissPopoverViewController()            
+        }
         
         guard let groups = self.displayGroups, groups.count > indexPath.row else {
             assertionFailure("Expect groups with count > \(indexPath.row)")
@@ -311,5 +332,9 @@ class DKAssetGroupListVC: UITableViewController, DKImageGroupDataManagerObserver
         }
         
         self.didChangeValue(forKey: "preferredContentSize")
+    }
+
+    @objc func cancelButtonPressed() {
+        self.dismiss(animated: true, completion: nil)
     }
 }
