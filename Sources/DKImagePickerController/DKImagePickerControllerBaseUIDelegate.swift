@@ -78,6 +78,8 @@ public protocol DKImagePickerControllerUIDelegate {
     func imagePickerControllerSelectGroupButton(_ imagePickerController: DKImagePickerController, selectedGroup: DKAssetGroup) -> UIButton
 
     func imagePickerControllerGroupListPresentationStyle() -> DKImagePickerGroupListPresentationStyle
+
+    func imagePickerControllerPrepareGroupListViewController(_ listViewController: UITableViewController)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -245,6 +247,10 @@ open class DKImagePickerControllerBaseUIDelegate: NSObject, DKImagePickerControl
 
     open func imagePickerControllerGroupListPresentationStyle() -> DKImagePickerGroupListPresentationStyle {
         return .popover
+    }
+
+    open func imagePickerControllerPrepareGroupListViewController(_ listViewController: UITableViewController) {
+        // nothing by default, override in subclasses to customize group list table view
     }
 }
 

@@ -200,6 +200,8 @@ class DKAssetGroupListVC: UITableViewController, DKImageGroupDataManagerObserver
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        self.imagePickerController.UIDelegate.imagePickerControllerPrepareGroupListViewController(self)
+
         let cellType = self.imagePickerController.UIDelegate.imagePickerControllerGroupCell()
         self.tableView.register(cellType, forCellReuseIdentifier: DKImageGroupCellIdentifier)
         self.tableView.rowHeight = cellType.preferredHeight
